@@ -1,7 +1,7 @@
-conf/
-steps/
-utils/
-local/
+conf
+steps
+utils
+local
 data/
 exp/
 experiment_results/
