@@ -1,0 +1,9 @@
+conf/
+steps/
+utils/
+local/
+data/
+exp/
+experiment_results/
+mfcc/
+.DS_Store
