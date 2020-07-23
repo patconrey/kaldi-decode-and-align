@@ -7,3 +7,4 @@ exp/
 experiment_results/
 mfcc/
 .DS_Store
+file_creation/*.txt

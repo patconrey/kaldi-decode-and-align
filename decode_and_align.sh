@@ -29,7 +29,6 @@ PRETRAINED_MODEL_DIR=exp/tri3
 
 utils/mkgraph.sh data/lang_test_bg $PRETRAINED_MODEL_DIR exp/decode_and_align/graph
 
-# Copy final.mdl over to exp/decode_and_align
 if [ -f "exp/decode_and_align/final.mdl" ]; then
     echo Not copying over final.mdl
 else
@@ -53,22 +52,22 @@ lattice-best-path ark:'gunzip -c exp/decode_and_align/decode/lat.2.gz |' 'ark,t:
 lattice-best-path ark:'gunzip -c exp/decode_and_align/decode/lat.3.gz |' 'ark,t:| int2sym.pl -f 2- exp/decode_and_align/graph/words.txt > exp/decode_and_align/text.3.txt'
 lattice-best-path ark:'gunzip -c exp/decode_and_align/decode/lat.4.gz |' 'ark,t:| int2sym.pl -f 2- exp/decode_and_align/graph/words.txt > exp/decode_and_align/text.4.txt'
 
-echo ============================================================================
-echo "Aligning Data"
-echo ============================================================================
+# echo ============================================================================
+# echo "Aligning Data"
+# echo ============================================================================
 
-steps/align_si.sh --nj 2 --cmd "$train_cmd" data/decode_and_align data/lang \
-    exp/tri3 experiment_results/decode_and_align || exit 1;
+# steps/align_si.sh --nj 2 --cmd "$train_cmd" data/decode_and_align data/lang \
+#     exp/tri3 experiment_results/decode_and_align || exit 1;
 
-echo ============================================================================
-echo "Extracting Time-Marked Conversion File"
-echo ============================================================================
+# echo ============================================================================
+# echo "Extracting Time-Marked Conversion File"
+# echo ============================================================================
 
-for i in  experiment_results/decode_and_align/ali.*.gz; do
-    $KALDI_ROOT/src/bin/ali-to-phones --ctm-output exp/tri3/final.mdl \
-        ark:"gunzip -c $i|" -> ${i%.gz}.ctm;
-done
+# for i in  experiment_results/decode_and_align/ali.*.gz; do
+#     $KALDI_ROOT/src/bin/ali-to-phones --ctm-output exp/tri3/final.mdl \
+#         ark:"gunzip -c $i|" -> ${i%.gz}.ctm;
+# done
 
-cat experiment_results/decode_and_align/*.ctm > experiment_results/decode_and_align/merged_decode_and_align.txt
+# cat experiment_results/decode_and_align/*.ctm > experiment_results/decode_and_align/merged_decode_and_align.txt
 
-python phone_id_to_phone.py
+# python phone_id_to_phone.py
