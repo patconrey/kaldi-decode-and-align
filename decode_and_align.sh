@@ -4,68 +4,169 @@
 [ -f path.sh ] && . ./path.sh
 set -e
 
-decode_nj=4
+echo > custom_logs/log
+
+# Acoustic model parameters
+numLeavesTri1=2500
+numGaussTri1=15000
+numLeavesMLLT=2500
+numGaussMLLT=15000
+numLeavesSAT=2500
+numGaussSAT=15000
+numGaussUBM=400
+numLeavesSGMM=7000
+numGaussSGMM=9000
+
+feats_nj=1
+train_nj=1
+decode_nj=1
+
+# echo ============================================================================
+# echo TIMIT Data Prep
+# echo ============================================================================
+
+# echo Timit Data Prep >> custom_logs/log
+# date +"%T" >> custom_logs/log
+
+# timit=/home/tvuong/Datasets/LDC93S1/TIMITcorpus/TIMIT
+
+# local/timit_data_prep.sh $timit || exit 1
+
+# local/timit_prepare_dict.sh
+
+# utils/prepare_lang.sh --sil-prob 0.0 --position-dependent-phones false --num-sil-states 3 \
+#  data/local/dict "sil" data/local/lang_tmp data/lang
+
+# local/timit_format_data.sh
+
+# echo Timit Data Prep Done >> custom_logs/log
+# date +"%T" >> custom_logs/log
+# echo  >> custom_logs/log
 
 echo ============================================================================
-echo "MFCC Feature Extration"
+echo VTD Data Prep
 echo ============================================================================
+
+echo VTD Data Prep >> custom_logs/log
+date +"%T" >> custom_logs/log
+
+file_creation/create_vtd_files.sh
+
+echo VTD Data Prep Done >> custom_logs/log
+date +"%T" >> custom_logs/log
+echo  >> custom_logs/log
+
+echo Done with VTD data prep.
+
+echo ============================================================================
+echo MFCC Feature Extration
+echo ============================================================================
+
+echo MFCCs >> custom_logs/log
+date +"%T" >> custom_logs/log
 
 mfccdir=mfcc
 
-for x in decode_and_align; do
-    steps/make_mfcc.sh --cmd "$train_cmd" --nj 1 data/$x exp/make_mfcc/$x $mfccdir
-	steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x $mfccdir
+# for x in train vtd_decode_and_align; do
+for x in vtd_decode_and_align; do
+    echo $x >> custom_logs/log
+    date +"%T" >> custom_logs/log
+    steps/make_mfcc.sh --cmd "$train_cmd" --nj $feats_nj --mfcc-config custom_conf/mfcc.conf data/$x exp/make_mfcc/$x $mfccdir
+    steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x $mfccdir
+    utils/data/validate_data_dir.sh --no-text data/$x
 done
 
-utils/data/validate_data_dir.sh --no-text data/decode_and_align
+echo MFCCs Done >> custom_logs/log
+date +"%T" >> custom_logs/log
 
-echo ============================================================================
-echo "SGMM2 Decoding"
-echo ============================================================================
-
-PRETRAINED_MODEL_DIR=exp/tri3
-
-utils/mkgraph.sh data/lang_test_bg $PRETRAINED_MODEL_DIR exp/decode_and_align/graph
-
-if [ -f "exp/decode_and_align/final.mdl" ]; then
-    echo Not copying over final.mdl
-else
-    cp $PRETRAINED_MODEL_DIR/final.mdl exp/decode_and_align/
-    cp $PRETRAINED_MODEL_DIR/tree exp/decode_and_align/
-    cp $PRETRAINED_MODEL_DIR/final.mat exp/decode_and_align/
-    cp $PRETRAINED_MODEL_DIR/splice_opts exp/decode_and_align/
-    cp $PRETRAINED_MODEL_DIR/cmvn_opts exp/decode_and_align/
-    echo Copied final.mdl and tree to exp/decode_and_align/final.mdl
-fi
-
-steps/decode_fmllr.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
-    exp/decode_and_align/graph data/decode_and_align exp/decode_and_align/decode
-
-echo ============================================================================
-echo "Getting Transcript"
-echo ============================================================================
-
-lattice-best-path ark:'gunzip -c exp/decode_and_align/decode/lat.1.gz |' 'ark,t:| int2sym.pl -f 2- exp/decode_and_align/graph/words.txt > exp/decode_and_align/text.1.txt'
-lattice-best-path ark:'gunzip -c exp/decode_and_align/decode/lat.2.gz |' 'ark,t:| int2sym.pl -f 2- exp/decode_and_align/graph/words.txt > exp/decode_and_align/text.2.txt'
-lattice-best-path ark:'gunzip -c exp/decode_and_align/decode/lat.3.gz |' 'ark,t:| int2sym.pl -f 2- exp/decode_and_align/graph/words.txt > exp/decode_and_align/text.3.txt'
-lattice-best-path ark:'gunzip -c exp/decode_and_align/decode/lat.4.gz |' 'ark,t:| int2sym.pl -f 2- exp/decode_and_align/graph/words.txt > exp/decode_and_align/text.4.txt'
+echo  >> custom_logs/log
 
 # echo ============================================================================
-# echo "Aligning Data"
+# echo "                     MonoPhone Training & Decoding                        "
 # echo ============================================================================
 
-# steps/align_si.sh --nj 2 --cmd "$train_cmd" data/decode_and_align data/lang \
-#     exp/tri3 experiment_results/decode_and_align || exit 1;
+# echo Monophone Training and Decoding >> custom_logs/log
+# date +"%T" >> custom_logs/log
+
+# steps/train_mono.sh  --nj "$train_nj" --cmd "$train_cmd" data/train data/lang exp/mono
+
+# utils/mkgraph.sh data/lang_test_bg exp/mono exp/mono/graph
+
+# echo Done >> custom_logs/log
+# date +"%T" >> custom_logs/log
+
+# echo  >> custom_logs/log
 
 # echo ============================================================================
-# echo "Extracting Time-Marked Conversion File"
+# echo "           tri1 : Deltas + Delta-Deltas Training                          "
 # echo ============================================================================
 
-# for i in  experiment_results/decode_and_align/ali.*.gz; do
-#     $KALDI_ROOT/src/bin/ali-to-phones --ctm-output exp/tri3/final.mdl \
-#         ark:"gunzip -c $i|" -> ${i%.gz}.ctm;
-# done
+# echo Tri1 Training >> custom_logs/log
+# date +"%T" >> custom_logs/log
 
-# cat experiment_results/decode_and_align/*.ctm > experiment_results/decode_and_align/merged_decode_and_align.txt
+# steps/align_si.sh --boost-silence 1.25 --nj "$train_nj" --cmd "$train_cmd" \
+#     data/train data/lang exp/mono exp/mono_ali
+
+# steps/train_deltas.sh --cmd "$train_cmd" \
+#     $numLeavesTri1 $numGaussTri1 data/train data/lang exp/mono_ali exp/tri1
+
+# echo Tri1 Training Done >> custom_logs/log
+# date +"%T" >> custom_logs/log
+
+# echo  >> custom_logs/log
+
+echo ============================================================================
+echo "tri1 : Deltas + Delta-Deltas Decoding"
+echo ============================================================================
+
+echo Tri1 Decoding >> custom_logs/log
+date +"%T" >> custom_logs/log
+
+utils/mkgraph.sh data/lang_test_bg exp/tri1 exp/tri1/graph
+
+custom_steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
+   exp/tri1/graph data/vtd_decode_and_align exp/tri1/vtd_decode_and_align
+
+echo Tri1 Decoding Done >> custom_logs/log
+date +"%T" >> custom_logs/log
+
+echo  >> custom_logs/log
+
+echo ============================================================================
+echo Getting Transcript
+echo ============================================================================
+
+echo Getting Transcript >> custom_logs/log
+date +"%T" >> custom_logs/log
+
+lattice-best-path ark:'gunzip -c exp/tri1/vtd_decode_and_align/lat.1.gz |' 'ark,t:| int2sym.pl -f 2- exp/tri1/graph/words.txt > data/vtd_decode_and_align/text'
+
+echo Getting Transcript Done >> custom_logs/log
+date +"%T" >> custom_logs/log
+
+echo ============================================================================
+echo Aligning Data
+echo ============================================================================
+
+echo Aligning Data >> custom_logs/log
+date +"%T" >> custom_logs/log
+
+cp data/vtd_decode_and_align/text data/vtd_decode_and_align/split1/1/
+steps/align_si.sh --nj 1 --cmd "$train_cmd" data/vtd_decode_and_align data/lang \
+    exp/tri1 experiment_results/vtd_decode_and_align_rm2_se11/mc14 || exit 1;
+
+echo Aligning Data Done >> custom_logs/log
+date +"%T" >> custom_logs/log
+
+echo ============================================================================
+echo "Extracting Time-Marked Conversion File"
+echo ============================================================================
+
+for i in experiment_results/vtd_decode_and_align_rm2_se11/mc14/ali.*.gz; do
+    $KALDI_ROOT/src/bin/ali-to-phones --ctm-output exp/tri1/final.mdl \
+        ark:"gunzip -c $i|" -> ${i%.gz}.ctm;
+done
+
+cat experiment_results/vtd_decode_and_align_rm2_se11/mc14/*.ctm > experiment_results/vtd_decode_and_align_rm2_se11/mc14/merged_vtd_decode_and_align.txt
 
 # python phone_id_to_phone.py
